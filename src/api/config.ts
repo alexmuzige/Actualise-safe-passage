@@ -7,8 +7,8 @@
  */
 
 /** Serveur backend par défaut (surchargable via `VITE_API_BASE_URL`). */
-//export const DEFAULT_API_BASE_URL = "https://safe-passage-navigator-1.onrender.com/api/";
-export const DEFAULT_API_BASE_URL = "http://192.168.1.77:8000/api/";
+export const DEFAULT_API_BASE_URL = "https://safe-passage-navigator-1.onrender.com/api/";
+//export const DEFAULT_API_BASE_URL = "http://192.168.1.77:8000/api/";
 export const API_BASE_URL: string = (
   (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? DEFAULT_API_BASE_URL
 ).replace(/\/$/, "");

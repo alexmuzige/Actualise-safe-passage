@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  ShieldAlert,
   Radio,
   MapPinned,
   Activity,
@@ -54,6 +53,8 @@ function Landing() {
   const incidents = useIncidents();
   const [contactOpen, setContactOpen] = useState(false);
 
+  const contactLabel = lang === "fr" ? "Contactez-nous" : "Contact us";
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Ambient background */}
@@ -72,22 +73,26 @@ function Landing() {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/70 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4 sm:px-5">
           <Link to="/" className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain" />
-              <div className="leading-tight">
-                <div className="font-mono text-[13px] font-semibold tracking-wider">
-                  HUMASAFE
-                </div>
-                <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
-                  {lang === "fr" ? "Analyse d'itinéraires" : "Route analysis"}
-                </div>
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain" />
+            <div className="leading-tight">
+              <div className="font-mono text-[13px] font-semibold tracking-wider">
+                HUMASAFE
+              </div>
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                {lang === "fr" ? "Analyse d'itinéraires" : "Route analysis"}
               </div>
             </div>
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#capacites" className="hover:text-foreground">{tr("navCapabilities")}</a>
-            <a href="#processus" className="hover:text-foreground">{tr("navProcess")}</a>
-            <a href="#terrain" className="hover:text-foreground">{tr("navField")}</a>
+            <a href="#capacites" className="hover:text-foreground">
+              {tr("navCapabilities")}
+            </a>
+            <a href="#processus" className="hover:text-foreground">
+              {tr("navProcess")}
+            </a>
+            <a href="#terrain" className="hover:text-foreground">
+              {tr("navField")}
+            </a>
           </nav>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {/* Language switcher */}
@@ -98,6 +103,7 @@ function Landing() {
             >
               <Languages className="ml-2 h-3 w-3 text-muted-foreground" />
               <button
+                type="button"
                 onClick={() => setLang("fr")}
                 className={
                   "px-2 py-1 transition " +
@@ -110,6 +116,7 @@ function Landing() {
                 FR
               </button>
               <button
+                type="button"
                 onClick={() => setLang("en")}
                 className={
                   "px-2 py-1 transition " +
@@ -125,6 +132,7 @@ function Landing() {
 
             {/* Theme toggle */}
             <button
+              type="button"
               onClick={toggleTheme}
               aria-label={theme === "dark" ? tr("themeToLight") : tr("themeToDark")}
               title={theme === "dark" ? tr("themeToLight") : tr("themeToDark")}
@@ -163,31 +171,35 @@ function Landing() {
               {tr("activeNode")}
             </div>
             <h1 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-tight sm:text-4xl md:text-6xl">
-              {tr("heroTitle1")} <span className="text-primary">{tr("heroTitleAccent")}</span> {tr("heroTitle2")}
+              {tr("heroTitle1")} <span className="text-primary">{tr("heroTitleAccent")}</span>{" "}
+              {tr("heroTitle2")}
             </h1>
             <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
               {tr("heroBody")}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
-                to="/dashboard"
+                to="/login"
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 sm:flex-none"
               >
                 {tr("openDashboard")}
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
+              {/* CORRECTION : le paramètre passe par `search`, pas dans `to` */}
               <Link
-                to="/rapport"
+                to="/login"
+                search={{ report: true }}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-border bg-card/60 px-5 py-2.5 text-sm text-foreground transition hover:bg-card sm:flex-none"
               >
                 {tr("sendReport")}
               </Link>
               <button
+                type="button"
                 onClick={() => setContactOpen(true)}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-5 py-2.5 text-sm font-medium text-foreground transition hover:bg-primary/20 sm:flex-none"
               >
                 <MessagesSquare className="h-4 w-4 text-primary" />
-                {lang === "fr" ? "Contactez-nous" : "Contact us"}
+                {contactLabel}
               </button>
             </div>
 
@@ -198,9 +210,7 @@ function Landing() {
                 { k: "< 2 min", l: tr("statDecision") },
               ].map((s) => (
                 <div key={s.l}>
-                  <dt className="font-mono text-2xl font-semibold tracking-tight">
-                    {s.k}
-                  </dt>
+                  <dt className="font-mono text-2xl font-semibold tracking-tight">{s.k}</dt>
                   <dd className="mt-1 text-[11px] uppercase tracking-widest text-muted-foreground">
                     {s.l}
                   </dd>
@@ -212,11 +222,12 @@ function Landing() {
           {/* Console preview avec image de fond "volcan.jpg" */}
           <div className="relative">
             <div className="absolute -inset-6 -z-10 rounded-3xl bg-gradient-to-br from-primary/10 via-transparent to-risk-critical/10 blur-2xl" />
-            
-            <div 
+
+            <div
               className="relative overflow-hidden rounded-xl border border-border/80 p-4 shadow-2xl backdrop-blur-md"
               style={{
-                backgroundImage: "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.88)), url('/volcan.jpg')",
+                backgroundImage:
+                  "linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.88)), url('/volcan.jpg')",
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }}
@@ -238,10 +249,7 @@ function Landing() {
                   { name: "Kibumba — Rugari", score: 58, tone: "moderate" },
                   { name: "Rugari — Rutshuru", score: 81, tone: "critical" },
                 ].map((s) => (
-                  <div
-                    key={s.name}
-                    className="rounded-md border border-white/10 bg-black/40 p-3"
-                  >
+                  <div key={s.name} className="rounded-md border border-white/10 bg-black/40 p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">{s.name}</span>
                       <span
@@ -310,13 +318,7 @@ function Landing() {
                   className="inline-block h-2.5 w-2.5 rounded-sm"
                   style={{ backgroundColor: `var(--risk-${r})` }}
                 />
-                {r === "low"
-                  ? lang === "fr" ? "faible" : "low"
-                  : r === "moderate"
-                    ? lang === "fr" ? "modéré" : "moderate"
-                    : r === "high"
-                      ? lang === "fr" ? "élevé" : "high"
-                      : lang === "fr" ? "critique" : "critical"}
+                {riskLabel(r, lang)}
               </span>
             ))}
             <span className="ml-auto font-mono text-[10px] opacity-70">
@@ -350,8 +352,7 @@ function Landing() {
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border"
                   style={{
                     color: "var(--primary)",
-                    backgroundColor:
-                      "color-mix(in oklch, var(--primary) 12%, transparent)",
+                    backgroundColor: "color-mix(in oklch, var(--primary) 12%, transparent)",
                   }}
                 >
                   <c.icon className="h-4 w-4" />
@@ -417,9 +418,7 @@ function Landing() {
             <h2 className="mt-2 max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
               {tr("ctaTitle")}
             </h2>
-            <p className="mt-3 max-w-xl text-muted-foreground">
-              {tr("ctaBody")}
-            </p>
+            <p className="mt-3 max-w-xl text-muted-foreground">{tr("ctaBody")}</p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 to="/signup"
@@ -435,11 +434,12 @@ function Landing() {
                 {tr("haveAccount")}
               </Link>
               <button
+                type="button"
                 onClick={() => setContactOpen(true)}
                 className="inline-flex items-center gap-2 rounded-md border border-border bg-background/50 px-5 py-2.5 text-sm text-foreground transition hover:bg-background"
               >
                 <MessagesSquare className="h-4 w-4 text-primary" />
-                {lang === "fr" ? "Contactez-nous" : "Contact us"}
+                {contactLabel}
               </button>
             </div>
           </div>
@@ -455,22 +455,48 @@ function Landing() {
 
       <ContactDialog open={contactOpen} onClose={() => setContactOpen(false)} lang={lang} />
 
-      {/* Bouton flottant contact */}
+      {/* Bouton flottant contact (marge de sécurité pour les téléphones à encoche) */}
       <button
+        type="button"
         onClick={() => setContactOpen(true)}
-        aria-label={lang === "fr" ? "Contactez-nous" : "Contact us"}
-        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-xl transition hover:opacity-90"
+        aria-label={contactLabel}
+        style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        className="fixed right-4 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground shadow-xl transition hover:opacity-90"
       >
         <MessagesSquare className="h-4 w-4" />
-        <span className="hidden sm:inline">{lang === "fr" ? "Contactez-nous" : "Contact us"}</span>
+        <span className="hidden sm:inline">{contactLabel}</span>
       </button>
     </div>
   );
 }
 
+// ---- Helpers ----
+
+type RiskLevel = "low" | "moderate" | "high" | "critical";
+
+function riskLabel(r: RiskLevel, lang: "fr" | "en"): string {
+  const labels: Record<RiskLevel, { fr: string; en: string }> = {
+    low: { fr: "faible", en: "low" },
+    moderate: { fr: "modéré", en: "moderate" },
+    high: { fr: "élevé", en: "high" },
+    critical: { fr: "critique", en: "critical" },
+  };
+  return labels[r][lang];
+}
+
 // ---- Capability cards with live data previews ----
 
 type Incident = ReturnType<typeof useIncidents>[number];
+
+// CORRECTION : `as const` conserve les chemins littéraux, requis par <Link to={...}>
+const CAPABILITY_ROUTES = {
+  map: "/dashboard",
+  score: "/zones",
+  reco: "/itineraires",
+  offline: "/rapport",
+  network: "/incidents",
+  privacy: "/profil",
+} as const satisfies Record<CapKey, string>;
 
 function capabilityCards({
   tr,
@@ -491,9 +517,7 @@ function capabilityCards({
       const score = zoneSegments.length
         ? Math.round(zoneSegments.reduce((a, b) => a + b, 0) / zoneSegments.length)
         : 0;
-      const signals = incidents.filter(
-        (i) => i.zoneId === z.id && i.status !== "resolved",
-      ).length;
+      const signals = incidents.filter((i) => i.zoneId === z.id && i.status !== "resolved").length;
       return { z, score, signals };
     })
     .sort((a, b) => b.score - a.score);
@@ -504,23 +528,21 @@ function capabilityCards({
 
   const topZone = zoneRows[0];
 
-  const itinRows = itineraries.map((it) => ({
-    it,
-    score: itineraryScore(it.id, incidents),
-    reco: recommend(itineraryScore(it.id, incidents)),
-  }));
+  const itinRows = itineraries.map((it) => {
+    const score = itineraryScore(it.id, incidents);
+    return { it, score, reco: recommend(score) };
+  });
 
+  // CORRECTION : copie avant tri pour ne pas muter le tableau d'origine
   const mainReco =
-    itinRows.length > 0
-      ? itinRows.sort((a, b) => b.score - a.score)[0].reco
-      : "go";
+    itinRows.length > 0 ? [...itinRows].sort((a, b) => b.score - a.score)[0].reco : "go";
 
   const pending = incidents.filter((i) => i.status === "unverified").length;
 
   const reporters = new Set(incidents.map((i) => i.reporter));
 
   const verified = incidents.filter((i) => i.status === "verified").length;
-  const unverified = incidents.filter((i) => i.status === "unverified").length;
+  const unverified = pending;
 
   const stats = (key: CapKey) => {
     switch (key) {
@@ -577,15 +599,6 @@ function capabilityCards({
     privacy: tr("capLiveData"),
   };
 
-  const routes: Record<CapKey, string> = {
-    map: "/dashboard",
-    score: "/zones",
-    reco: "/itineraires",
-    offline: "/rapport",
-    network: "/incidents",
-    privacy: "/profil",
-  };
-
   const cards = [
     { key: "map" as CapKey, icon: MapPinned, title: tr("cap1t"), body: tr("cap1b") },
     { key: "score" as CapKey, icon: Activity, title: tr("cap2t"), body: tr("cap2b") },
@@ -597,7 +610,7 @@ function capabilityCards({
 
   return cards.map((c) => ({
     ...c,
-    to: routes[c.key],
+    to: CAPABILITY_ROUTES[c.key],
     badge: badges[c.key],
     stats: stats(c.key),
   }));

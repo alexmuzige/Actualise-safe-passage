@@ -7,7 +7,7 @@ import { AppLayout } from "@/components/app-layout";
 import { RiskMap, MapLegend } from "@/components/risk-map";
 import { IncidentRow } from "@/components/incident-row";
 import { RiskBadge } from "@/components/risk-badge";
-import { useIncidents } from "@/lib/incidents-store";
+import { useIncidents, useConnectionUptime } from "@/lib/incidents-store";
 import {
   itineraries,
   itineraryScore,
@@ -18,8 +18,8 @@ import {
   segmentScore,
   healthZones,
 } from "@/lib/mock-data";
-import { ArrowUpRight, TrendingUp, Activity, AlertTriangle, Users, Filter, X, Share2, Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowUpRight, TrendingUp, Activity, AlertTriangle, Users, Filter, X, Share2, Check, Wifi } from "lucide-react";
+import { memo, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const dashboardSearchSchema = z.object({
@@ -32,6 +32,24 @@ const dashboardSearchSchema = z.object({
 export const Route = createFileRoute("/dashboard")({
   validateSearch: zodValidator(dashboardSearchSchema),
   component: Dashboard,
+});
+
+const SyncStatus = memo(function SyncStatus() {
+  const { formatted } = useConnectionUptime();
+
+  return (
+    <div
+      title="Durée de connexion à la plateforme"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground"
+    >
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-risk-low opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-risk-low" />
+      </span>
+      <Wifi className="h-3 w-3" />
+      <span className="tabular-nums">Connecté depuis {formatted}</span>
+    </div>
+  );
 });
 
 function Dashboard() {
@@ -61,7 +79,6 @@ function Dashboard() {
       replace: true,
     });
   };
-
 
   const setFZone = (v: string) => setFilter({ zone: v });
   const setFMinSev = (v: number) => setFilter({ minSev: v });
@@ -106,7 +123,6 @@ function Dashboard() {
     }
   };
 
-
   const stats = useMemo(() => {
     const last72h = incidents.filter(
       (i) => Date.now() - new Date(i.createdAt).getTime() < 72 * 3600 * 1000,
@@ -122,13 +138,16 @@ function Dashboard() {
     };
   }, [incidents]);
 
-
-  const rankedItineraries = itineraries
-    .map((it) => {
-      const score = itineraryScore(it.id, incidents);
-      return { it, score, risk: classify(score), reco: recommend(score) };
-    })
-    .sort((a, b) => a.score - b.score);
+  const rankedItineraries = useMemo(
+    () =>
+      itineraries
+        .map((it) => {
+          const score = itineraryScore(it.id, incidents);
+          return { it, score, risk: classify(score), reco: recommend(score) };
+        })
+        .sort((a, b) => a.score - b.score),
+    [incidents],
+  );
 
   return (
     <AppLayout>
@@ -138,9 +157,12 @@ function Dashboard() {
             <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
               Situation opérationnelle
             </div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-              Tableau de bord — Nord-Kivu
-            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Tableau de bord — Nord-Kivu
+              </h1>
+              <SyncStatus />
+            </div>
           </div>
           <Link
             to="/rapport"
@@ -244,20 +266,20 @@ function Dashboard() {
                   {filteredIncidents.length}/{incidents.length} signaux
                 </span>
                 {canShare && (
-                <button
-                  type="button"
-                  onClick={shareFilters}
-                  title="Copier le lien avec les filtres"
-                  disabled={copied}
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-                    copied
-                      ? "border-risk-low/40 bg-risk-low/10 text-risk-low"
-                      : "border-border bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {copied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
-                  {copied ? "Lien copié" : "Partager"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={shareFilters}
+                    title="Copier le lien avec les filtres"
+                    disabled={copied}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                      copied
+                        ? "border-risk-low/40 bg-risk-low/10 text-risk-low"
+                        : "border-border bg-background text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {copied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
+                    {copied ? "Lien copié" : "Partager"}
+                  </button>
                 )}
                 {filtersActive && (
                   <button
@@ -276,7 +298,6 @@ function Dashboard() {
               <RiskMap incidents={filteredIncidents} className="h-full w-full" />
             </div>
           </section>
-
 
           <section className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-4 py-3">
@@ -348,7 +369,7 @@ function Dashboard() {
   );
 }
 
-function Kpi({
+const Kpi = memo(function Kpi({
   label,
   value,
   hint,
@@ -383,4 +404,4 @@ function Kpi({
       </div>
     </div>
   );
-}
+});

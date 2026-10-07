@@ -1,0 +1,1 @@
+import{utils as e,writeFile as t}from"./xlsx-BHKh7vjA.js";function n(n,r,i=`Données`){let a=e.json_to_sheet(n),o=e.book_new();e.book_append_sheet(o,a,i.slice(0,31));let s=new Date().toISOString().slice(0,10);t(o,`${r}-${s}.xlsx`)}export{n as exportToExcel};

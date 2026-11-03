@@ -1,6 +1,6 @@
 import { api } from "./client";
 import { endpoints } from "./endpoints";
-import { API_MOCK_MODE } from "./config";
+import { DEFAULT_API_BASE_URL } from "./config";
 import {
   healthZones,
   itineraries,
@@ -11,8 +11,17 @@ import {
 } from "@/lib/mock-data";
 
 export async function fetchZones(): Promise<HealthZone[]> {
-  if (API_MOCK_MODE) return healthZones;
-  return api.get<HealthZone[]>(endpoints.zones.list());
+  const endpoint = `${DEFAULT_API_BASE_URL}/locations/`;
+  const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Inclure les cookies pour la session
+        
+      });
+      alert(`Response status: ${response.json()}`);
+  return api.get<HealthZone[]>(response.json)
 }
 
 export async function fetchZoneScores(): Promise<Array<{ zoneId: string; score: number }>> {

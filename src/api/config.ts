@@ -14,8 +14,9 @@ export const API_BASE_URL: string = (
 ).replace(/\/$/, "");
 
 /** Console d'administration par défaut (surchargable via `VITE_ADMIN_CONSOLE_URL`). */
-//export const DEFAULT_ADMIN_CONSOLE_URL = "https://safe-passage-navigator-1.onrender.com/admin/";
-export const DEFAULT_ADMIN_CONSOLE_URL = "http://192.168.1.77:8000/admin/";
+export const DEFAULT_ADMIN_CONSOLE_URL = "https://safe-passage-navigator-1.onrender.com/admin/";
+export const DEFAULT_ADMIN_API_URL = "https://safe-passage-navigator-1.onrender.com/";
+//export const DEFAULT_ADMIN_CONSOLE_URL = "http://192.168.1.77:8000/admin/";
 
 /** Console d'administration où sont redirigés les comptes disposant du rôle « admin ». */
 export const ADMIN_CONSOLE_URL: string =

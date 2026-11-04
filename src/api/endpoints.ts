@@ -7,50 +7,66 @@ import { API_BASE_URL } from "./config";
 export const endpoints = {
   auth: {
     login: () => `${API_BASE_URL}/login`,
-    signup: () => `${API_BASE_URL}/signup`,
-    logout: () => `${API_BASE_URL}/logout`,
-    session: () => `${API_BASE_URL}/session`,
+    forgotPassword: (username: string) =>
+      withQuery(`${API_BASE_URL}/auth/forgot-password`, { username }),
+    resetPassword: (token: string, newPassword: string) =>
+      withQuery(`${API_BASE_URL}/auth/reset-password`, { token, new_password: newPassword }),
   },
-  profile: {
-    me: () => `${API_BASE_URL}/profile/me`,
-    update: () => `${API_BASE_URL}/profile/me`,
+  actors: {
+    list: (query?: { q?: string; code_parent?: string; type?: string }) =>
+      withQuery(`${API_BASE_URL}/actors/list`, query),
+    byParentCode: (codeParent: string) =>
+      withQuery(`${API_BASE_URL}/actors/type`, { code_parent: codeParent }),
+    create: () => `${API_BASE_URL}/actors/create`,
+    update: (id: number) => `${API_BASE_URL}/actors/update/${id}`,
+    remove: (id: number) => `${API_BASE_URL}/actors/delete/${id}`,
+  },
+  users: {
+    list: (query?: { skip?: number; limit?: number; is_active?: boolean }) =>
+      withQuery(`${API_BASE_URL}/user/list`, query),
+    detail: (id: number) => `${API_BASE_URL}/user/${id}`,
+    create: () => `${API_BASE_URL}/user/create`,
+    update: (id: number) => `${API_BASE_URL}/user/update/${id}`,
+    remove: (id: number) => `${API_BASE_URL}/user/delete/${id}`,
+    roles: () => `${API_BASE_URL}/user/roles`,
+  },
+  identity: {
+    genders: () => `${API_BASE_URL}/get/sexe/list`,
+  },
+  profiles: {
+    list: () => `${API_BASE_URL}/profiles/`,
+    create: () => `${API_BASE_URL}/profiles/create`,
+    detail: (id: number) => `${API_BASE_URL}/profiles/${id}`,
+    byIdentity: (id: number) => `${API_BASE_URL}/profiles/identity/${id}`,
+    update: (id: number) => `${API_BASE_URL}/profiles/${id}`,
+    remove: (id: number) => `${API_BASE_URL}/profiles/${id}`,
   },
   incidents: {
-    list: (query?: Record<string, string | number | undefined>) =>
-      withQuery(`${API_BASE_URL}/incidents`, query),
-    detail: (id: string) => `${API_BASE_URL}/incidents/${id}`,
-    create: () => `${API_BASE_URL}/incidents`,
-    update: (id: string) => `${API_BASE_URL}/incidents/${id}`,
-    verify: (id: string) => `${API_BASE_URL}/incidents/${id}/verify`,
-    remove: (id: string) => `${API_BASE_URL}/incidents/${id}`,
-    sync: () => `${API_BASE_URL}/incidents/sync`,
+    list: () => `${API_BASE_URL}/incidents/stream`,
+    detail: (id: number) => `${API_BASE_URL}/incidents/${id}`,
+    create: () => `${API_BASE_URL}/incidents/create`,
   },
-  zones: {
-    list: () => `${API_BASE_URL}/zones`,
-    detail: (id: string) => `${API_BASE_URL}/zones/${id}`,
-    scores: () => `${API_BASE_URL}/zones/scores`,
+  permissions: {
+    list: () => `${API_BASE_URL}/permissions`,
+    create: () => `${API_BASE_URL}/permissions/create`,
+    detail: (id: number) => `${API_BASE_URL}/permissions/${id}`,
+    update: (id: number) => `${API_BASE_URL}/permissions/${id}`,
+    sync: () => `${API_BASE_URL}/permissions/sync`,
+    forRole: (role: string) =>
+      `${API_BASE_URL}/permissions/roles/${encodeURIComponent(role)}/permissions`,
+    forUser: (id: number) => `${API_BASE_URL}/permissions/users/${id}/permissions`,
   },
-  itineraries: {
-    list: () => `${API_BASE_URL}/itineraries`,
-    detail: (id: string) => `${API_BASE_URL}/itineraries/${id}`,
-    analyze: (id: string) => `${API_BASE_URL}/itineraries/${id}/analyze`,
-    segments: () => `${API_BASE_URL}/segments`,
-  },
-  admin: {
-    features: () => `${API_BASE_URL}/admin/features`,
-    setFeature: () => `${API_BASE_URL}/admin/features`,
-    users: () => `${API_BASE_URL}/admin/users`,
-  },
-  exports: {
-    incidentsXlsx: () => `${API_BASE_URL}/exports/incidents.xlsx`,
-    zonesXlsx: () => `${API_BASE_URL}/exports/zones.xlsx`,
-    itineraryXlsx: (id: string) => `${API_BASE_URL}/exports/itineraires/${id}.xlsx`,
+  analytics: {
+    train: () => `${API_BASE_URL}/analytics/train`,
+    simulateInference: () => `${API_BASE_URL}/analytics/simulate-inference`,
+    confirmReport: (id: number) => `${API_BASE_URL}/analytics/reports/${id}/confirm`,
+    overrideReport: (id: number) => `${API_BASE_URL}/analytics/reports/${id}/override`,
   },
 } as const;
 
 export function withQuery(
   url: string,
-  query?: Record<string, string | number | undefined>,
+  query?: Record<string, string | number | boolean | undefined>,
 ): string {
   if (!query) return url;
   const params = new URLSearchParams();

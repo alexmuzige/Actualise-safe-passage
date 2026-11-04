@@ -1,53 +1,63 @@
 import { useSyncExternalStore } from "react";
+import type { ServerUser } from "@/api/users.api";
 
-export type User = {
-  name: string;
-  role: string;
-  email: string;
-  initials: string;
-};
+const KEY = "humasafe-authenticated-user-v1";
 
-const DEFAULT_USER: User = {
-  name: "Utilisateur",
-  role: "Agent terrain",
-  email: "utilisateur@humasafe.org",
-  initials: "U",
-};
-
-// Toujours un utilisateur valide par défaut : évite un écran vide
-// si le store n'a pas encore été initialisé avec de vraies données.
-let currentUser: User = { ...DEFAULT_USER };
-
+let currentUser: ServerUser | null = null;
+let hydrated = false;
 const listeners = new Set<() => void>();
 
+function hydrate() {
+  if (hydrated || typeof window === "undefined") return;
+  hydrated = true;
+
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      Number.isInteger((parsed as ServerUser).id) &&
+      typeof (parsed as ServerUser).username === "string"
+    ) {
+      currentUser = parsed as ServerUser;
+    } else {
+      throw new Error("Données de session invalides.");
+    }
+  } catch (error) {
+    console.error("Impossible de restaurer la session HUMASAFE depuis le stockage local.", error);
+    localStorage.removeItem(KEY);
+  }
+}
+
 function emit() {
-  listeners.forEach((l) => l());
+  listeners.forEach((listener) => listener());
 }
 
 export const authStore = {
-  get: () => currentUser,
-  subscribe: (l: () => void) => {
-    listeners.add(l);
-    return () => listeners.delete(l);
+  get: () => {
+    hydrate();
+    return currentUser;
   },
-  updateProfile: (patch: Partial<User>) => {
-    currentUser = { ...currentUser, ...patch };
+  subscribe: (listener: () => void) => {
+    hydrate();
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+  setUser: (user: ServerUser) => {
+    currentUser = user;
+    localStorage.setItem(KEY, JSON.stringify(user));
     emit();
   },
   logout: () => {
-    // Réinitialise sur l'utilisateur par défaut plutôt que null,
-    // pour ne jamais casser l'affichage de la sidebar.
-    currentUser = { ...DEFAULT_USER };
+    currentUser = null;
+    localStorage.removeItem(KEY);
     emit();
-    // TODO: brancher votre vraie déconnexion, ex:
-    // await fetch("/api/logout", { method: "POST" });
   },
 };
 
-export function useAuth(): User {
-  return useSyncExternalStore(
-    authStore.subscribe,
-    authStore.get,
-    authStore.get,
-  );
+export function useAuth(): ServerUser | null {
+  return useSyncExternalStore(authStore.subscribe, authStore.get, () => null);
 }

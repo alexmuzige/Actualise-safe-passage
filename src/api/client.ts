@@ -17,26 +17,42 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
 
 /** Client HTTP unique : timeout, retry réseau, erreurs typées. */
 export async function apiFetch<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const { body, retries = API_RETRIES, timeoutMs = API_TIMEOUT_MS, headers, ...rest } = options;
+  const { body, retries, timeoutMs = API_TIMEOUT_MS, headers, method = "GET", ...rest } = options;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const isUrlEncoded = body instanceof URLSearchParams;
+  const requestBody: BodyInit | undefined =
+    body === undefined ? undefined : isFormData || isUrlEncoded ? body : JSON.stringify(body);
+  const retryCount =
+    retries ?? (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()) ? API_RETRIES : 0);
 
   let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
         ...rest,
+        method,
         signal: controller.signal,
+        credentials: rest.credentials ?? "include",
         headers: {
-          "Content-Type": "application/json",
+          ...(!isFormData && !isUrlEncoded ? { "Content-Type": "application/json" } : {}),
           ...(headers ?? {}),
         },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        ...(requestBody !== undefined ? { body: requestBody } : {}),
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new ApiError(text || `Requête échouée (${res.status})`, res.status);
+        const text = await res.text();
+        let message = text;
+        try {
+          const body = JSON.parse(text) as Record<string, unknown>;
+          const detail = body.detail ?? body.message ?? body.error;
+          if (typeof detail === "string") message = detail;
+        } catch {
+          // Keep the response text when the server does not return JSON.
+        }
+        throw new ApiError(message || `Requête échouée (${res.status})`, res.status);
       }
       if (res.status === 204) return undefined as T;
       return (await res.json()) as T;
@@ -48,15 +64,15 @@ export async function apiFetch<T>(url: string, options: RequestOptions = {}): Pr
       clearTimeout(timer);
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new ApiError("Base de données injoignable", 0);
+  throw lastError instanceof Error ? lastError : new ApiError("Base de données injoignable", 0);
 }
 
 export const api = {
   get: <T>(url: string, o?: RequestOptions) => apiFetch<T>(url, { ...o, method: "GET" }),
   post: <T>(url: string, body?: unknown, o?: RequestOptions) =>
     apiFetch<T>(url, { ...o, method: "POST", body }),
+  put: <T>(url: string, body?: unknown, o?: RequestOptions) =>
+    apiFetch<T>(url, { ...o, method: "PUT", body }),
   patch: <T>(url: string, body?: unknown, o?: RequestOptions) =>
     apiFetch<T>(url, { ...o, method: "PATCH", body }),
   delete: <T>(url: string, o?: RequestOptions) => apiFetch<T>(url, { ...o, method: "DELETE" }),

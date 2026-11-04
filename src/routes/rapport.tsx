@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useFeature } from "@/lib/features-store";
 import { AppLayout } from "@/components/app-layout";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { CATEGORY_LABEL, healthZones, routeSegments, type IncidentCategory, type Severity } from "@/lib/mock-data";
 import { incidentsStore } from "@/lib/incidents-store";
-import { Paperclip, MapPin, Send, WifiOff } from "lucide-react";
+import { Paperclip, MapPin, Send, WifiOff, X } from "lucide-react";
 
 export const Route = createFileRoute("/rapport")({
   component: NewReport,
@@ -34,22 +34,23 @@ function NewReport() {
   const [reporter, setReporter] = useState("IN-");
   const [segmentId, setSegmentId] = useState("");
   const [when, setWhen] = useState(() => new Date().toISOString().slice(0, 16));
-  const [attachments, setAttachments] = useState(0);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [offline, setOffline] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const zone = healthZones.find((z) => z.id === zoneId);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     const parsed = schema.safeParse({ zoneId, area, category, severity, description, reporter, segmentId: segmentId || undefined, when });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Formulaire invalide");
       return;
     }
-    const id = `r-${1043 + Math.floor(Math.random() * 900)}`;
     const zoneObj = healthZones.find((z) => z.id === zoneId)!;
-    incidentsStore.add({
-      id,
+    const payload = {
       zoneId,
       area,
       category: category as IncidentCategory,
@@ -60,15 +61,30 @@ function NewReport() {
       x: zoneObj.x + (Math.random() - 0.5) * 4,
       y: zoneObj.y + (Math.random() - 0.5) * 4,
       segmentId: segmentId || undefined,
-      attachments,
+      attachments: attachments.length,
       status: "unverified",
-    });
-    if (offline) {
-      toast.success("Rapport en file · sera synchronisé au retour du réseau");
-    } else {
-      toast.success(`Rapport ${id.toUpperCase()} transmis`);
+    } as const;
+
+    setSubmitting(true);
+    try {
+      if (offline) {
+        incidentsStore.add({ ...payload, id: `r-${1043 + Math.floor(Math.random() * 900)}` });
+        toast.success("Rapport en file · sera synchronisé au retour du réseau");
+      } else {
+        if (attachments.length > 0) {
+          throw new Error("Le serveur actuel ne propose pas encore de route pour téléverser les pièces jointes.");
+        }
+        if (zoneObj.serverLocationId === undefined) {
+          throw new Error("Le serveur exige un identifiant numérique de lieu, mais ne publie pas encore d'API pour charger les zones.");
+        }
+        throw new Error("L'API d'incidents actuelle ne prend pas en charge tous les champs de ce formulaire. Le rapport n'a pas été envoyé.");
+      }
+      navigate({ to: "/incidents" });
+    } catch (error) {
+      toast.error(error instanceof Error ? `Échec de l'envoi : ${error.message}` : "Échec de l'envoi du rapport");
+    } finally {
+      setSubmitting(false);
     }
-    navigate({ to: "/incidents" });
   }
 
   return (
@@ -199,13 +215,44 @@ function NewReport() {
               <input value={reporter} onChange={(e) => setReporter(e.target.value)} placeholder="IN-000" className={inputCls} />
             </Field>
             <Field label="Pièces jointes (facultatives)">
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  const selectedFiles = Array.from(e.currentTarget.files ?? []);
+                  if (selectedFiles.length > 0) {
+                    setAttachments((current) => [...current, ...selectedFiles]);
+                  }
+                  e.currentTarget.value = "";
+                }}
+              />
               <button
                 type="button"
-                onClick={() => setAttachments((a) => a + 1)}
+                onClick={() => attachmentInputRef.current?.click()}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-foreground"
               >
-                <Paperclip className="h-4 w-4" /> Ajouter {attachments > 0 && `(${attachments})`}
+                <Paperclip className="h-4 w-4" />
+                Choisir un fichier {attachments.length > 0 && `(${attachments.length})`}
               </button>
+              {attachments.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {attachments.map((file, index) => (
+                    <li key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Retirer ${file.name}`}
+                        onClick={() => setAttachments((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                        className="shrink-0 rounded p-1 hover:text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Field>
           </Section>
 
@@ -230,9 +277,10 @@ function NewReport() {
               {canReport ? (
                 <button
                   type="submit"
+                  disabled={submitting}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
                 >
-                  <Send className="h-4 w-4" /> Transmettre
+                  <Send className="h-4 w-4" /> {submitting ? "Envoi…" : "Transmettre"}
                 </button>
               ) : (
                 <span className="rounded-md border border-border px-4 py-2 text-sm text-muted-foreground">

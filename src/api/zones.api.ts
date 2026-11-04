@@ -1,6 +1,5 @@
-import { api } from "./client";
-import { endpoints } from "./endpoints";
-import { DEFAULT_API_BASE_URL } from "./config";
+import { API_MOCK_MODE } from "./config";
+import { ApiError } from "./client";
 import {
   healthZones,
   itineraries,
@@ -11,35 +10,27 @@ import {
 } from "@/lib/mock-data";
 
 export async function fetchZones(): Promise<HealthZone[]> {
-  const endpoint = `${DEFAULT_API_BASE_URL}/locations/`;
-  const response = await fetch(endpoint, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Inclure les cookies pour la session
-        
-      });
-      alert(`Response status: ${response.json()}`);
-  return api.get<HealthZone[]>(response.json)
+  if (API_MOCK_MODE) return healthZones;
+  throw new ApiError("Le serveur ne publie pas encore de route de liste des zones.", 501);
 }
 
 export async function fetchZoneScores(): Promise<Array<{ zoneId: string; score: number }>> {
   if (API_MOCK_MODE) return healthZones.map((z) => ({ zoneId: z.id, score: 0 }));
-  return api.get(endpoints.zones.scores());
+  throw new ApiError("Le serveur ne publie pas encore de route de scores des zones.", 501);
 }
 
 export async function fetchItineraries(): Promise<Itinerary[]> {
   if (API_MOCK_MODE) return itineraries;
-  return api.get<Itinerary[]>(endpoints.itineraries.list());
+  throw new ApiError("Le serveur ne publie pas encore de route d'itinéraires.", 501);
 }
 
 export async function fetchSegments(): Promise<RouteSegment[]> {
   if (API_MOCK_MODE) return routeSegments;
-  return api.get<RouteSegment[]>(endpoints.itineraries.segments());
+  throw new ApiError("Le serveur ne publie pas encore de route de tronçons.", 501);
 }
 
 export async function analyzeItinerary(id: string) {
   if (API_MOCK_MODE) return null;
-  return api.post(endpoints.itineraries.analyze(id));
+  void id;
+  throw new ApiError("Le serveur ne publie pas encore de route d'analyse d'itinéraire.", 501);
 }

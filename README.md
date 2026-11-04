@@ -63,6 +63,7 @@ SITREP-NK vise à répondre à un besoin concret des missions humanitaires en **
 - Formulaire structuré pour saisir un incident.
 - Catégorisation : affrontement, embuscade, enlèvement, engin explosif, pillage, manifestation, barrage illégal, autre.
 - Gestion de la gravité, de la localisation, des pièces jointes et du mode hors-ligne.
+- Le serveur actuel ne prend pas encore en charge tous les champs du formulaire ni le téléversement des pièces jointes ; l'application signale ces limites au lieu de déclarer le rapport envoyé.
 - Notifications `toast` après soumission.
 
 ### 📋 Suivi des incidents (`/incidents`)
@@ -187,6 +188,39 @@ L’application est accessible sur [http://localhost:8080](http://localhost:8080
 ```bash
 bun run build
 ```
+
+### Build iOS
+
+Le projet utilise Capacitor pour intégrer l’application web à l’application iOS.
+La compilation native et la signature nécessitent macOS avec Xcode.
+
+```bash
+# Générer les assets mobiles et les synchroniser avec le projet iOS
+bun run sync:ios
+
+# Sur macOS, ouvrir le projet dans Xcode, sélectionner une cible et lancer la compilation
+bunx cap open ios
+```
+
+Le schéma iOS se trouve dans `ios/App/App.xcodeproj`. Configurez la signature Apple
+dans Xcode pour installer l’application sur un appareil ou créer une archive de distribution.
+
+### Build Android
+
+Le projet utilise Capacitor pour intégrer l’application web à l’application Android.
+Installez un JDK 17 ou ultérieur et Android SDK 36.
+
+```bash
+# Générer les assets mobiles et les synchroniser avec le projet Android
+bun run sync:android
+
+# Depuis la racine du projet, compiler l’APK de débogage
+cd android
+./gradlew assembleDebug
+```
+
+Sous Windows, utilisez `.\gradlew.bat assembleDebug` depuis le dossier `android`.
+L’APK de débogage est généré dans `android/app/build/outputs/apk/debug/`.
 
 ### Linter & formatage
 

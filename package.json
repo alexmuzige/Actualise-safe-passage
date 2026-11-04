@@ -9,6 +9,9 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "build:mobile": "vite build --config vite.config.mobile.ts",
+    "sync:ios": "vite build --config vite.config.mobile.ts && cap sync ios",
+    "sync:android": "vite build --config vite.config.mobile.ts && cap sync android",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",

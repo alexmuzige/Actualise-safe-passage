@@ -4,3 +4,7 @@ export * from "./client";
 export * from "./incidents.api";
 export * from "./zones.api";
 export * from "./auth.api";
+export * from "./actors.api";
+export * from "./users.api";
+export * from "./permissions.api";
+export * from "./analytics.api";

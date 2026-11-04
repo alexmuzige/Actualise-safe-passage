@@ -16,11 +16,13 @@ export type RiskClass = "low" | "moderate" | "high" | "critical";
 export type Recommendation = "go" | "reroute" | "postpone";
 
 export interface HealthZone {
-
+  id: string;
   name: string;
-  type: string;
-  parent_id: number;
- 
+  territory: string;
+  x: number;
+  y: number;
+  areas: string[];
+  serverLocationId?: number;
 }
 
 export interface Incident {

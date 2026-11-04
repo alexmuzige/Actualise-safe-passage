@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppLayout } from "@/components/app-layout";
 import {
-  useProfile,
-  updateProfile,
-  resetProfile,
-  ROLE_LABEL,
   CHANNEL_LABEL,
-  type FieldRole,
+  resetProfile,
+  syncProfileFromServer,
+  updateProfile,
+  useProfile,
   type AlertChannel,
 } from "@/lib/profile-store";
 import { healthZones } from "@/lib/mock-data";
-import { useMemo, useState } from "react";
+import { authStore } from "@/lib/auth-store";
+import { saveUserIdentity } from "@/api/users.api";
+import { ProfileAvatar } from "@/components/profile-avatar";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import {
   UserCircle2,
@@ -23,6 +25,8 @@ import {
   LogOut,
   Settings,
   ChevronDown,
+  Camera,
+  Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/profil")({
@@ -68,7 +72,13 @@ function ProfilePage() {
   const navigate = useNavigate();
   const [draft, setDraft] = useState(profile);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [avatarProcessing, setAvatarProcessing] = useState(false);
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(profile), [draft, profile]);
+
+  useEffect(() => {
+    setDraft(profile);
+  }, [profile]);
 
   function set<K extends keyof typeof draft>(k: K, v: (typeof draft)[K]) {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -77,9 +87,7 @@ function ProfilePage() {
   function toggleZone(id: string) {
     set(
       "zoneIds",
-      draft.zoneIds.includes(id)
-        ? draft.zoneIds.filter((z) => z !== id)
-        : [...draft.zoneIds, id],
+      draft.zoneIds.includes(id) ? draft.zoneIds.filter((z) => z !== id) : [...draft.zoneIds, id],
     );
   }
 
@@ -92,17 +100,93 @@ function ProfilePage() {
     );
   }
 
-  function save() {
-    updateProfile(draft);
-    toast.success("Profil mis à jour");
+  async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+
+    if (!authStore.get()) {
+      toast.error("Connectez-vous pour enregistrer une photo de profil.");
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Choisissez une image au format JPEG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La photo doit faire au maximum 5 Mo.");
+      return;
+    }
+
+    setAvatarProcessing(true);
+    try {
+      const avatarImage = await optimizeAvatar(file);
+      updateProfile({ avatarImage });
+      setDraft((currentDraft) => ({ ...currentDraft, avatarImage }));
+      toast.success("Photo de profil enregistrée sur cet appareil.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de charger cette photo.");
+    } finally {
+      setAvatarProcessing(false);
+    }
+  }
+
+  function removeAvatar() {
+    try {
+      updateProfile({ avatarImage: null });
+      setDraft((currentDraft) => ({ ...currentDraft, avatarImage: null }));
+      toast.success("Photo de profil supprimée.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de supprimer cette photo.");
+    }
+  }
+
+  async function save() {
+    const user = authStore.get();
+    if (!user) {
+      toast.error("Connectez-vous pour enregistrer votre profil.");
+      return;
+    }
+
+    const nameParts = draft.fullName.trim().split(/\s+/).filter(Boolean);
+    if (nameParts.length < 2) {
+      toast.error("Saisissez au moins le prénom et le nom.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const updatedUser = await saveUserIdentity(user, {
+        prenom: nameParts[0]!,
+        nom: nameParts[nameParts.length - 1]!,
+        postnom: nameParts.slice(1, -1).join(" "),
+      });
+      updateProfile({
+        avatarColor: draft.avatarColor,
+        baseCity: draft.baseCity,
+        territory: draft.territory,
+        zoneIds: draft.zoneIds,
+        language: draft.language,
+        offlineFirst: draft.offlineFirst,
+        alertChannels: draft.alertChannels,
+        minAlertSeverity: draft.minAlertSeverity,
+      });
+      syncProfileFromServer(updatedUser);
+      toast.success("Profil enregistré sur le serveur");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le profil.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function reset() {
     resetProfile();
-    toast.message("Profil réinitialisé aux valeurs par défaut");
+    toast.message("Préférences locales réinitialisées. L'identité serveur est conservée.");
   }
 
   function handleLogout() {
+    authStore.logout();
     toast.success("Déconnexion réussie");
     navigate({ to: "/" });
   }
@@ -113,7 +197,7 @@ function ProfilePage() {
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-              Identité opérationnelle · stockée localement
+              Identité du compte serveur · préférences locales
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Profil utilisateur</h1>
           </div>
@@ -125,23 +209,27 @@ function ProfilePage() {
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-xs transition hover:bg-accent"
               >
-                <div
-                  className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-background"
-                  style={{ backgroundColor: draft.avatarColor }}
-                >
-                  {draft.initials}
-                </div>
+                <ProfileAvatar
+                  image={draft.avatarImage}
+                  initials={draft.initials}
+                  color={draft.avatarColor}
+                  className="h-5 w-5 text-[10px]"
+                />
                 <span className="max-w-[100px] truncate">{draft.fullName}</span>
-                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isMenuOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isMenuOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-52 rounded-md border border-border bg-card py-1.5 shadow-xl z-50">
                   <div className="border-b border-border px-3 py-1.5 mb-1">
                     <p className="text-xs font-semibold truncate">{draft.fullName}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{draft.organization || "Analyste terrain"}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {draft.organization || "Analyste terrain"}
+                    </p>
                   </div>
-                  
+
                   {/* Option 1 : Modifier le profil */}
                   <button
                     onClick={() => {
@@ -151,7 +239,7 @@ function ProfilePage() {
                     }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-foreground hover:bg-accent transition cursor-pointer"
                   >
-                    <Settings className="h-4 w-4 text-primary" /> 
+                    <Settings className="h-4 w-4 text-primary" />
                     <span>Modifier le profil</span>
                   </button>
 
@@ -165,7 +253,7 @@ function ProfilePage() {
                     }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 transition font-medium cursor-pointer"
                   >
-                    <LogOut className="h-4 w-4" /> 
+                    <LogOut className="h-4 w-4" />
                     <span>Se déconnecter</span>
                   </button>
                 </div>
@@ -181,10 +269,10 @@ function ProfilePage() {
               </button>
               <button
                 onClick={save}
-                disabled={!dirty}
+                disabled={!dirty || saving}
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-xs transition disabled:opacity-40 cursor-pointer"
               >
-                <Save className="h-3.5 w-3.5" /> Enregistrer
+                <Save className="h-3.5 w-3.5" /> {saving ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           </div>
@@ -192,15 +280,49 @@ function ProfilePage() {
 
         {/* Identity card */}
         <section className="mb-4 overflow-hidden rounded-lg border border-border bg-card">
-          <SectionHeader icon={UserCircle2} title="Identité" subtitle="Nom affiché et avatar" />
+          <SectionHeader
+            icon={UserCircle2}
+            title="Identité"
+            subtitle="Nom synchronisé avec le compte serveur"
+          />
           <div className="grid gap-4 p-5 md:grid-cols-[auto_1fr]">
             <div className="flex flex-col items-center gap-3">
-              <div
-                className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-semibold text-background shadow-inner"
-                style={{ backgroundColor: draft.avatarColor }}
-              >
-                {draft.initials}
+              <ProfileAvatar
+                image={draft.avatarImage}
+                initials={draft.initials}
+                color={draft.avatarColor}
+                className="h-24 w-24 text-3xl shadow-inner"
+              />
+              <div className="flex flex-wrap justify-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent">
+                  <Camera className="h-3.5 w-3.5" />
+                  {avatarProcessing
+                    ? "Chargement..."
+                    : draft.avatarImage
+                      ? "Changer la photo"
+                      : "Ajouter une photo"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    disabled={avatarProcessing}
+                    onChange={handleAvatarChange}
+                  />
+                </label>
+                {draft.avatarImage && (
+                  <button
+                    type="button"
+                    onClick={removeAvatar}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Supprimer
+                  </button>
+                )}
               </div>
+              <p className="max-w-48 text-center text-[11px] text-muted-foreground">
+                JPEG, PNG ou WebP · 5 Mo maximum · conservée sur cet appareil
+              </p>
               <div className="flex flex-wrap justify-center gap-1.5">
                 {AVATAR_COLORS.map((c) => (
                   <button
@@ -225,14 +347,9 @@ function ProfilePage() {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </Field>
-              <Field label="Initiales (affichées dans l'en-tête)">
-                <input
-                  value={draft.initials}
-                  maxLength={3}
-                  onChange={(e) => set("initials", e.target.value.toUpperCase())}
-                  className="w-24 rounded-md border border-border bg-background px-3 py-2 text-center font-mono text-sm outline-none focus:border-primary"
-                />
-              </Field>
+              <p className="text-xs text-muted-foreground">
+                Les initiales sont calculées à partir du nom enregistré.
+              </p>
             </div>
           </div>
         </section>
@@ -248,22 +365,16 @@ function ProfilePage() {
             <Field label="ONG / Agence">
               <input
                 value={draft.organization}
-                onChange={(e) => set("organization", e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                readOnly
+                className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground outline-none"
               />
             </Field>
             <Field label="Fonction">
-              <select
+              <input
                 value={draft.role}
-                onChange={(e) => set("role", e.target.value as FieldRole)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              >
-                {(Object.keys(ROLE_LABEL) as FieldRole[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
+                readOnly
+                className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground outline-none"
+              />
             </Field>
             <Field label="Ville de base">
               <input
@@ -303,9 +414,7 @@ function ProfilePage() {
                   key={z.id}
                   onClick={() => toggleZone(z.id)}
                   className={`flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition cursor-pointer ${
-                    active
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-transparent"
+                    active ? "border-primary bg-primary/10" : "border-border bg-transparent"
                   }`}
                 >
                   <div className="min-w-0">
@@ -355,7 +464,9 @@ function ProfilePage() {
                   }
                   className="flex-1 accent-primary"
                 />
-                <span className="w-10 text-right font-mono text-sm">{draft.minAlertSeverity}/5</span>
+                <span className="w-10 text-right font-mono text-sm">
+                  {draft.minAlertSeverity}/5
+                </span>
               </div>
             </Field>
 
@@ -426,12 +537,37 @@ function ProfilePage() {
 
         <div className="flex items-center gap-2 rounded-md border border-border bg-card/50 px-4 py-3 text-xs text-muted-foreground">
           <Shield className="h-3.5 w-3.5 text-risk-low" />
-          Profil stocké uniquement sur cet appareil (localStorage). Aucune donnée n'est transmise
-          hors de votre poste.
+          L'identité, le rôle et l'organisation proviennent de votre compte serveur. Les préférences
+          opérationnelles restent enregistrées localement pour ce compte.
         </div>
       </div>
     </AppLayout>
   );
+}
+
+async function optimizeAvatar(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 512 / bitmap.width, 512 / bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Impossible de préparer cette image.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const image = canvas.toDataURL("image/webp", 0.85);
+    if (!/^data:image\/(?:png|jpeg|webp);base64,/.test(image)) {
+      throw new Error("Le format de cette image n'est pas pris en charge.");
+    }
+    if (image.length > 750_000) {
+      throw new Error("Cette image reste trop volumineuse après compression.");
+    }
+    return image;
+  } finally {
+    bitmap.close();
+  }
 }
 
 function SectionHeader({

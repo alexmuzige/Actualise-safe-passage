@@ -9,9 +9,12 @@ import {
 } from "lucide-react";
 import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { API_BASE_URL } from "../api/config";
-import { getApiMessage, readJsonBody } from "../lib/api-response";
-import { extractRoleFromAuthResponse, resolvePostLoginTarget } from "../lib/role-routing";
+import { login } from "../api/auth.api";
+import { registerAccount, resolveAuthenticatedUser, type RegistrationForm } from "../api/users.api";
+import { searchActors } from "../api/actors.api";
+import { startConnectionSession } from "../lib/incidents-store";
+import { resolvePostLoginTarget } from "../lib/role-routing";
+import { syncProfileFromServer } from "../lib/profile-store";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -23,6 +26,11 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+interface AuthFormState extends RegistrationForm {
+  parentCode: string;
+  org: string;
+}
+
 function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -32,7 +40,7 @@ function LoginPage() {
   const [activeStep, setActiveStep] = useState<number>(1);
 
   // États pour lier tous les champs de l'inscription avec les 4 rôles précis
-  const [formDataState, setFormDataState] = useState({
+  const [formDataState, setFormDataState] = useState<AuthFormState>({
     lastName: "",
     surname: "",
     firstName: "",
@@ -41,6 +49,7 @@ function LoginPage() {
     nationality: "",
     gender: "",
     parentCode: "",
+    actorId: null as number | null,
     org: "",
     role: "informateur", // Valeur par défaut parmi : admin, analyst, informant, actor
     username: "",
@@ -49,7 +58,11 @@ function LoginPage() {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormDataState((prev) => ({ ...prev, [name]: value }));
+    setFormDataState((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "parentCode" ? { actorId: null, org: "" } : {}),
+    }));
   };
 
   // Validation par blocs
@@ -63,7 +76,10 @@ function LoginPage() {
   );
 
   const isBlock2Complete = Boolean(
-    formDataState.parentCode.trim() && formDataState.org.trim() && formDataState.role.trim(),
+    formDataState.parentCode.trim() &&
+    formDataState.actorId !== null &&
+    formDataState.org.trim() &&
+    formDataState.role.trim(),
   );
 
   const isBlock3Complete = Boolean(
@@ -76,66 +92,37 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    const endpoint = isLoginMode ? `${API_BASE_URL}/login` : `${API_BASE_URL}/signup`;
-    const payload = isLoginMode
-      ? { username: formDataState.username, password: formDataState.password }
-      : {
-          last_name: formDataState.lastName,
-          surname: formDataState.surname,
-          first_name: formDataState.firstName,
-          phone: formDataState.phone,
-          email: formDataState.email,
-          nationality: formDataState.nationality,
-          gender: formDataState.gender,
-          parent_code: formDataState.parentCode,
-          organization: formDataState.org,
-          role: formDataState.role,
-          username: formDataState.username,
-          password: formDataState.password,
-        };
-
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Inclure les cookies pour la session
-        body: JSON.stringify(payload),
-      });
-
-      const data = await readJsonBody(response);
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("E-mail ou mot de passe incorrect.");
-        } else if (response.status === 404) {
-          throw new Error("Le service d'authentification est introuvable.");
-        } else if (response.status >= 500) {
-          throw new Error("Le serveur rencontre un problème technique. Réessayez plus tard.");
-        } else {
-          throw new Error(
-            getApiMessage(data) ?? "Impossible d'ouvrir la session. Vérifiez vos informations.",
-          );
-        }
+      if (!isLoginMode) {
+        await registerAccount(formDataState);
+        toast.success("Compte créé. Connectez-vous avec vos identifiants.");
+        setIsLoginMode(true);
+        return;
       }
 
-      toast.success(isLoginMode ? "Session ouverte · Redirection..." : "Compte créé avec succès !");
+      const response = await login({
+        username: formDataState.username,
+        password: formDataState.password,
+      });
+      const user = await resolveAuthenticatedUser(response, formDataState.username);
+      syncProfileFromServer(user);
+      startConnectionSession();
+      toast.success("Session ouverte · Redirection...");
 
-      // Rôle renvoyé par l'API (`{ role }` ou `{ user: { role } }`), repli sur l'état local
-      const userRole = extractRoleFromAuthResponse(data) ?? formDataState.role;
-      const target = resolvePostLoginTarget(userRole);
+      const target = resolvePostLoginTarget(user.role);
 
       if (target.kind === "external") {
-        // Connexion admin : redirection vers la console d'administration déployée
         window.location.assign(target.url);
       } else {
-        // Redirection interne vers l'espace adapté au rôle
         navigate({ to: target.to });
       }
     } catch (error: unknown) {
-      const err = error as Error;
-      toast.error(err.message || "Erreur de connexion au réseau.");
+      const err = error as Error & { status?: number };
+      toast.error(
+        err.status === 401
+          ? "Nom d'utilisateur ou mot de passe incorrect."
+          : err.message || "Erreur de connexion au réseau.",
+      );
     } finally {
       setLoading(false);
     }
@@ -179,10 +166,10 @@ export function AuthShell({
   setMode: (val: boolean) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   loading: boolean;
-  formDataState: Record<string, string>;
+  formDataState: AuthFormState;
   handleChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   isFormComplete: boolean;
-  setFormDataState: React.Dispatch<React.SetStateAction<any>>;
+  setFormDataState: React.Dispatch<React.SetStateAction<AuthFormState>>;
   activeStep: number;
   setActiveStep: (step: number) => void;
   isBlock1Complete: boolean;
@@ -431,11 +418,11 @@ export function AuthShell({
                       <DynamicParentCodeField
                         value={formDataState.parentCode}
                         onSelect={(selectedItem) => {
-                          setFormDataState((prev: any) => ({
+                          setFormDataState((prev) => ({
                             ...prev,
                             parentCode: selectedItem.value,
                             org: selectedItem.organization,
-                            role: selectedItem.role || prev.role,
+                            actorId: selectedItem.actorId,
                           }));
                         }}
                         onChange={handleChange}
@@ -637,12 +624,12 @@ function DynamicParentCodeField({
   onChange,
 }: {
   value: string;
-  onSelect: (item: { value: string; organization: string; role: string }) => void;
+  onSelect: (item: { value: string; organization: string; actorId: number }) => void;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 }) {
   const [searchValue, setSearchValue] = useState(value || "");
   const [results, setResults] = useState<
-    { label: string; value: string; organization: string; role: string }[]
+    { label: string; value: string; organization: string; actorId: number }[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -661,20 +648,15 @@ function DynamicParentCodeField({
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/actor/type?search=${encodeURIComponent(searchValue)}`,
+        const actors = await searchActors({ q: searchValue.trim() });
+        setResults(
+          actors.map((actor) => ({
+            label: actor.name,
+            value: actor.code_parent || String(actor.id),
+            organization: actor.organization || actor.name,
+            actorId: actor.id,
+          })),
         );
-        if (!response.ok) throw new Error("Erreur de récupération");
-
-        const data = await response.json();
-        const formatted = (Array.isArray(data) ? data : []).map((item: any) => ({
-          label: item.name || item.label,
-          value: item.code || item.id,
-          organization: item.organization || item.org || "Organisation non spécifiée",
-          role: item.role || item.actorType || "informant",
-        }));
-
-        setResults(formatted);
       } catch (error) {
         console.error("Erreur lors de la recherche :", error);
         setResults([]);

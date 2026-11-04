@@ -1,44 +1,58 @@
-import { api } from "./client";
-import { endpoints } from "./endpoints";
 import { API_MOCK_MODE } from "./config";
+import { api, ApiError } from "./client";
+import { endpoints } from "./endpoints";
 import { incidentsStore } from "@/lib/incidents-store";
-import type { Incident } from "@/lib/mock-data";
 
-export interface IncidentQuery {
-  zone?: string;
-  minSev?: number;
-  since?: string;
-  until?: string;
-  q?: string;
+export type ServerIncidentType = "attaque" | "enlèvement" | "route_bloquée";
+export type ServerRiskLevel = 1 | 2 | 3;
+
+export interface CreateServerIncident {
+  type: ServerIncidentType;
+  risk_level: ServerRiskLevel;
+  location_id: number;
+  description: string;
 }
 
-/** Liste des incidents (base de données, ou store local en mode mock). */
-export async function fetchIncidents(query: IncidentQuery = {}): Promise<Incident[]> {
+function unavailable(message: string): never {
+  throw new ApiError(message, 501);
+}
+
+export async function fetchIncidents(): Promise<unknown> {
   if (API_MOCK_MODE) return incidentsStore.get();
-  return api.get<Incident[]>(endpoints.incidents.list(query as Record<string, string | number | undefined>));
+  return api.get<unknown>(endpoints.incidents.list());
 }
 
-export async function fetchIncident(id: string): Promise<Incident | undefined> {
-  if (API_MOCK_MODE) return incidentsStore.get().find((i) => i.id === id);
-  return api.get<Incident>(endpoints.incidents.detail(id));
-}
-
-export async function createIncident(payload: Omit<Incident, "id">): Promise<Incident> {
+export async function fetchIncident(id: number): Promise<unknown> {
   if (API_MOCK_MODE) {
-    const created = { ...payload, id: `r-${Date.now().toString().slice(-4)}` } as Incident;
-    incidentsStore.add(created);
-    return created;
+    return unavailable("La consultation d'un incident serveur nécessite une connexion.");
   }
-  return api.post<Incident>(endpoints.incidents.create(), payload);
+  return api.get<unknown>(endpoints.incidents.detail(id));
 }
 
-export async function verifyIncident(id: string): Promise<void> {
-  if (API_MOCK_MODE) return;
-  await api.post(endpoints.incidents.verify(id));
+export async function createIncident(
+  payload: CreateServerIncident,
+  files: File[] = [],
+): Promise<unknown> {
+  if (API_MOCK_MODE) {
+    return unavailable("La création d'un incident serveur nécessite une connexion.");
+  }
+  if (files.length > 0) {
+    return unavailable("Le serveur ne publie pas encore d'API de téléversement de pièces jointes.");
+  }
+
+  const body = new URLSearchParams({
+    type: payload.type,
+    risk_level: String(payload.risk_level),
+    location_id: String(payload.location_id),
+    description: payload.description,
+  });
+  return api.post<unknown>(endpoints.incidents.create(), body);
 }
 
-/** Envoi de la file hors-ligne vers la base dès que le réseau revient. */
-export async function syncIncidents(queue: Incident[]): Promise<{ synced: number }> {
-  if (API_MOCK_MODE) return { synced: queue.length };
-  return api.post<{ synced: number }>(endpoints.incidents.sync(), { incidents: queue });
+export async function verifyIncident(_id: number): Promise<void> {
+  unavailable("Le serveur ne publie pas de route de vérification des incidents.");
+}
+
+export async function syncIncidents(_queue: CreateServerIncident[]): Promise<never> {
+  return unavailable("Le serveur ne publie pas de route de synchronisation hors ligne.");
 }

@@ -39,7 +39,7 @@ const SyncStatus = memo(function SyncStatus() {
 
   return (
     <div
-      title="Durée de connexion à la plateforme"
+      title="Temps écoulé depuis votre connexion à la plateforme"
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground"
     >
       <span className="relative flex h-1.5 w-1.5">

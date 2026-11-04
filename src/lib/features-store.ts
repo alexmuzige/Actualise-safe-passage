@@ -2,12 +2,7 @@ import { useSyncExternalStore } from "react";
 import { useProfile, type FieldRole, ROLE_LABEL } from "./profile-store";
 
 export type FeatureId =
-  | "export_csv"
-  | "export_excel"
-  | "new_report"
-  | "share_filters"
-  | "map_filters"
-  | "profile_edit";
+  "export_csv" | "export_excel" | "new_report" | "share_filters" | "map_filters" | "profile_edit";
 
 export interface FeatureMeta {
   id: FeatureId;
@@ -56,12 +51,16 @@ export const FEATURES: FeatureMeta[] = [
 ];
 
 export const ROLES: FieldRole[] = [
+  "administrateur",
   "analyste",
   "coordinateur",
   "informateur",
   "logisticien",
   "medecin",
   "securite",
+  "agent",
+  "acteur",
+  "coordonateur",
 ];
 
 export { ROLE_LABEL };
@@ -75,9 +74,7 @@ function buildDefaults(): FeatureMatrix {
   const all = (v: boolean) =>
     Object.fromEntries(ROLES.map((r) => [r, v])) as Record<FieldRole, boolean>;
 
-  const matrix = Object.fromEntries(
-    FEATURES.map((f) => [f.id, all(true)]),
-  ) as FeatureMatrix;
+  const matrix = Object.fromEntries(FEATURES.map((f) => [f.id, all(true)])) as FeatureMatrix;
 
   // Valeurs par défaut plus restrictives pour les rôles terrain.
   matrix.export_csv.informateur = false;
@@ -108,13 +105,17 @@ function hydrate() {
       }
       current = merged;
     }
-  } catch {}
+  } catch (error) {
+    console.error("Impossible de restaurer les permissions locales.", error);
+  }
 }
 
 function persist() {
   try {
     localStorage.setItem(KEY, JSON.stringify(current));
-  } catch {}
+  } catch (error) {
+    console.error("Impossible d'enregistrer les permissions locales.", error);
+  }
 }
 
 function emit() {
@@ -163,5 +164,5 @@ export function useFeature(id: FeatureId): boolean {
 
 export function useIsSuperAdmin(): boolean {
   const profile = useProfile();
-  return profile.role === SUPER_ADMIN_ROLE;
+  return profile.role === SUPER_ADMIN_ROLE || profile.role === "administrateur";
 }

@@ -36,7 +36,7 @@ export function useIncidents(): Incident[] {
 
 // ---------- Connexion / synchronisation ----------
 
-const connectedAt = Date.now();
+let connectedAt = Date.now();
 
 let uptimeSeconds = 0;
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -45,6 +45,11 @@ const uptimeListeners = new Set<() => void>();
 function tick() {
   uptimeSeconds = Math.max(0, Math.floor((Date.now() - connectedAt) / 1000));
   uptimeListeners.forEach((l) => l());
+}
+
+export function startConnectionSession() {
+  connectedAt = Date.now();
+  tick();
 }
 
 function startTicking() {

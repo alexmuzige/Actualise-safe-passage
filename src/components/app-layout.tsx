@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -6,18 +6,20 @@ import {
   ListChecks,
   Route as RouteIcon,
   MapPinned,
-  Radio,
-  ShieldAlert,
   ShieldCheck,
   Sun,
   Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
-import { useProfile, ROLE_LABEL } from "@/lib/profile-store";
+import { ROLE_LABEL, syncProfileFromServer, useProfile } from "@/lib/profile-store";
 import { useIsSuperAdmin } from "@/lib/features-store";
+import { ProfileAvatar } from "@/components/profile-avatar";
+import { fetchUser } from "@/api/users.api";
+import { authStore, useAuth } from "@/lib/auth-store";
+import { toast } from "sonner";
 
-
+const refreshedUserIds = new Set<number>();
 
 const nav: Array<{
   to: "/dashboard" | "/rapport" | "/incidents" | "/itineraires" | "/zones";
@@ -37,16 +39,30 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { theme, toggle } = useTheme();
   const profile = useProfile();
   const isSuperAdmin = useIsSuperAdmin();
+  const authUser = useAuth();
+  const authUserId = authUser?.id;
 
+  useEffect(() => {
+    if (authUserId === undefined || refreshedUserIds.has(authUserId)) return;
+    refreshedUserIds.add(authUserId);
 
-
+    void fetchUser(authUserId)
+      .then((user) => {
+        if (authStore.get()?.id === user.id) syncProfileFromServer(user);
+      })
+      .catch((error: unknown) => {
+        toast.error(
+          error instanceof Error ? error.message : "Impossible d'actualiser le compte serveur.",
+        );
+      });
+  }, [authUserId]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex items-center gap-2 border-b border-sidebar-border px-5 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ShieldAlert className="h-5 w-5" strokeWidth={2.25} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white">
+            <img src="/logo.png" alt="Logo HUMASAFE" className="h-full w-full object-contain" />
           </div>
           <div className="leading-tight">
             <div className="font-mono text-sm font-semibold tracking-wider">HUMASAFE</div>
@@ -77,9 +93,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   >
                     <Icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.75} />
                     <span>{item.label}</span>
-                    {active && (
-                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
-                    )}
+                    {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />}
                   </Link>
                 </li>
               );
@@ -107,7 +121,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </nav>
 
-
         <div className="border-t border-sidebar-border px-5 py-4">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="relative flex h-2 w-2">
@@ -125,19 +138,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b border-border bg-background/80 px-5 backdrop-blur">
           <div className="flex items-center gap-3">
-            <div className="md:hidden flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <ShieldAlert className="h-4 w-4" />
+            <div className="md:hidden flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white">
+              <img
+                src="/logo.png"
+                alt="Logo HUMASAFE"
+                className="h-full w-full rounded-md object-contain"
+              />
             </div>
             <div className="text-xs uppercase tracking-widest text-muted-foreground">
               République Démocratique du Congo · Nord-Kivu
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs md:flex">
-              <Radio className="h-3.5 w-3.5 text-risk-low" />
-              <span className="text-muted-foreground">Synchro</span>
-              <span className="font-mono">OK · il y a 2 min</span>
-            </div>
             <button
               onClick={toggle}
               aria-label="Basculer le thème"
@@ -152,12 +164,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
               className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-accent"
               title="Voir mon profil"
             >
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-background"
-                style={{ backgroundColor: profile.avatarColor }}
-              >
-                {profile.initials}
-              </div>
+              <ProfileAvatar
+                image={profile.avatarImage}
+                initials={profile.initials}
+                color={profile.avatarColor}
+                className="h-8 w-8 text-xs"
+              />
               <div className="hidden text-right text-xs leading-tight md:block">
                 <div className="font-medium">{profile.fullName}</div>
                 <div className="text-muted-foreground">
@@ -165,7 +177,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </div>
               </div>
             </Link>
-
           </div>
         </header>
 

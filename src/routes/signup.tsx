@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { API_BASE_URL } from "../api/config";
+import { registerAccount } from "../api/users.api";
+import { searchActors } from "../api/actors.api";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
@@ -36,15 +37,20 @@ function SignupPage() {
     nationality: "",
     gender: "",
     parentCode: "",
+    actorId: null as number | null,
     org: "",
-    role: "",
+    role: "informateur",
     username: "",
     password: "",
   });
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormDataState((prev) => ({ ...prev, [name]: value }));
+    setFormDataState((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "parentCode" ? { actorId: null, org: "" } : {}),
+    }));
   };
 
   const isBlock1Complete = Boolean(
@@ -57,7 +63,7 @@ function SignupPage() {
   );
 
   const isBlock2Complete = Boolean(
-    formDataState.parentCode.trim() && formDataState.org.trim() && formDataState.role.trim()
+    formDataState.parentCode.trim() && formDataState.actorId !== null && formDataState.org.trim() && formDataState.role.trim()
   );
 
   // Vérification que tous les champs du formulaire sont remplis pour débloquer le bouton
@@ -70,6 +76,7 @@ function SignupPage() {
     formDataState.nationality.trim() &&
     formDataState.gender.trim() &&
     formDataState.parentCode.trim() &&
+    formDataState.actorId !== null &&
     formDataState.org.trim() &&
     formDataState.role.trim() &&
     formDataState.username.trim() &&
@@ -82,40 +89,7 @@ function SignupPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          last_name: formDataState.lastName,
-          surname: formDataState.surname,
-          first_name: formDataState.firstName,
-          phone: formDataState.phone,
-          email: formDataState.email,
-          nationality: formDataState.nationality,
-          gender: formDataState.gender,
-          parent_code: formDataState.parentCode,
-          organization: formDataState.org,
-          role: formDataState.role,
-          username: formDataState.username,
-          password: formDataState.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 400) {
-          throw new Error(data.message || "Informations invalides. Vérifiez les champs du formulaire.");
-        } else if (response.status === 409) {
-          throw new Error("Cet e-mail est déjà associé à un compte existant.");
-        } else if (response.status >= 500) {
-          throw new Error("Le serveur rencontre un problème technique. Réessayez plus tard.");
-        } else {
-          throw new Error(data.message || "Échec de la création du compte.");
-        }
-      }
+      await registerAccount(formDataState);
 
       toast.success("Compte créé avec succès ! Un coordinateur vous contactera.");
       navigate({ to: "/login" });
@@ -305,7 +279,7 @@ function SignupPage() {
                         ...prev,
                         parentCode: selectedItem.value,
                         org: selectedItem.organization,
-                        role: selectedItem.role,
+                        actorId: selectedItem.actorId,
                       }));
                     }}
                     onChange={handleChange}
@@ -320,10 +294,14 @@ function SignupPage() {
                     onChange={handleChange}
                   />
                   <Field
-                    label="Rôle terrain"
+                    label="Rôle utilisateur"
                     name="role"
-                    placeholder="Rempli automatiquement via le code parent"
-                    readOnly
+                    options={[
+                      { label: "Informateur", value: "informateur" },
+                      { label: "Analyste", value: "analyste" },
+                      { label: "Agent", value: "agent" },
+                      { label: "Acteur", value: "acteur" },
+                    ]}
                     value={formDataState.role}
                     onChange={handleChange}
                   />
@@ -450,11 +428,11 @@ function DynamicParentCodeField({
   onChange,
 }: {
   value: string;
-  onSelect: (item: { value: string; organization: string; role: string }) => void;
+  onSelect: (item: { value: string; organization: string; actorId: number }) => void;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 }) {
   const [searchValue, setSearchValue] = useState(value || "");
-  const [results, setResults] = useState<{ label: string; value: string; organization: string; role: string }[]>([]);
+  const [results, setResults] = useState<{ label: string; value: string; organization: string; actorId: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -472,18 +450,13 @@ function DynamicParentCodeField({
     const delayDebounceFn = setTimeout(async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/actor/type?search=${encodeURIComponent(searchValue)}`);
-        if (!response.ok) throw new Error("Erreur de récupération");
-
-        const data = await response.json();
-        const formatted = data.map((item: any) => ({
-          label: item.name || item.label,
-          value: item.code || item.id,
-          organization: item.organization || item.org || "Organisation non spécifiée",
-          role: item.role || item.actorType || "Acteur",
-        }));
-
-        setResults(formatted);
+        const actors = await searchActors({ q: searchValue.trim() });
+        setResults(actors.map((actor) => ({
+          label: actor.name,
+          value: actor.code_parent || String(actor.id),
+          organization: actor.organization || actor.name,
+          actorId: actor.id,
+        })));
       } catch (error) {
         console.error("Erreur lors de la recherche :", error);
         setResults([]);
